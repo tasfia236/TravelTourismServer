@@ -26,6 +26,7 @@ async function run() {
         await client.connect();
 
         const userCollection = client.db("touristGuideDB").collection("users");
+        const spotCollection = client.db("touristGuideDB").collection("spots");
 
         // jwt related api
         app.post('/jwt', async (req, res) => {
@@ -78,6 +79,32 @@ async function run() {
                 return res.send({ message: 'user already exists', insertedId: null })
             }
             const result = await userCollection.insertOne(user);
+            res.send(result);
+        });
+
+        app.get('/spots', async (req, res) => {
+            const result = await spotCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/spots/:id', async (req, res) => {
+            const id = req.params.id;
+            const quary = { _id: new ObjectId(id) }
+            const result = await spotCollection.findOne(quary);
+            res.send(result);
+        })
+
+        app.patch('/wishspots/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updatedWishlist = req.body;
+            console.log(updatedWishlist);
+            const updateDoc = {
+                $set: {
+                    wishlist: updatedWishlist.wish,
+                },
+            };
+            const result = await spotCollection.updateOne(filter, updateDoc);
             res.send(result);
         });
 
