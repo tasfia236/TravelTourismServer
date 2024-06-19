@@ -37,7 +37,7 @@ async function run() {
 
         // middlewares 
         const verifyToken = (req, res, next) => {
-            console.log('inside verify token', req.headers.authorization);
+        //    console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'unauthorized access' });
             }
@@ -133,6 +133,28 @@ async function run() {
             res.send(result);
         });
 
+        app.patch('/users/tourGuide/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const options = { upsert: true };
+            const updateProfile = req.body;
+            
+            // Check for null or undefined values and handle appropriately
+            const profileUpdate = {};
+            if (updateProfile.name) profileUpdate.name = updateProfile.name;
+            if (updateProfile.email) profileUpdate.email = updateProfile.email;
+            if (updateProfile.image) profileUpdate.image = updateProfile.image;
+            if (updateProfile.newpass) profileUpdate.password = updateProfile.newpass;
+            
+            const updateDoc = {
+                $set: profileUpdate
+            };
+        
+            const result = await userCollection.updateOne(filter, updateDoc, options);
+            console.log(result);
+            res.send(result);
+        });
+
         app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
@@ -145,7 +167,7 @@ async function run() {
             res.send(result);
         })
 
-        app.patch('/users/admin/:id', verifyToken, verifyTourGuide, async (req, res) => {
+        app.patch('/users/tourGuide/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedDoc = {
