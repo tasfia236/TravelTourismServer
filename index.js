@@ -20,6 +20,8 @@ const client = new MongoClient(uri, {
     }
 });
 
+let requestedUsers = [];
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -27,6 +29,8 @@ async function run() {
 
         const userCollection = client.db("touristGuideDB").collection("users");
         const spotCollection = client.db("touristGuideDB").collection("spots");
+        const bookCollection = client.db("touristGuideDB").collection("books");
+        const guideRequestsCollection = client.db("touristGuideDB").collection("request");
 
         // jwt related api
         app.post('/jwt', async (req, res) => {
@@ -37,7 +41,7 @@ async function run() {
 
         // middlewares 
         const verifyToken = (req, res, next) => {
-        //    console.log('inside verify token', req.headers.authorization);
+            //    console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'unauthorized access' });
             }
@@ -120,6 +124,38 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/guides/:role', async (req, res) => {
+            const role = 'tourGuide';
+            console.log(role);
+            const query = { role: role }
+            const result = await userCollection.find(query).toArray();
+            res.send(result);
+        });
+
+
+        app.get('/request-guide', async (req, res) => {
+            const result = await guideRequestsCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.post('/request-guide', async (req, res) => {
+            const { user } = req.body;
+
+            // Check if user has already requested
+            if (requestedUsers.find(u => u.email === user.email)) {
+                return res.status(400).json({ message: 'User has already requested to be a tour guide.' });
+            }
+
+            // Simulate saving to database (replace with actual database logic)
+            requestedUsers.push(user);
+
+            // Example of sending email to admin (not implemented in this example)
+            const result = await guideRequestsCollection.insertOne(user);
+
+
+            res.status(200).json({ message: 'Request sent successfully' });
+        });
+
         app.post('/users', async (req, res) => {
             const user = req.body;
             // insert email if user doesnt exists: 
@@ -138,18 +174,18 @@ async function run() {
             const filter = { _id: new ObjectId(id) };
             const options = { upsert: true };
             const updateProfile = req.body;
-            
+
             // Check for null or undefined values and handle appropriately
             const profileUpdate = {};
             if (updateProfile.name) profileUpdate.name = updateProfile.name;
             if (updateProfile.email) profileUpdate.email = updateProfile.email;
             if (updateProfile.image) profileUpdate.image = updateProfile.image;
             if (updateProfile.newpass) profileUpdate.password = updateProfile.newpass;
-            
+
             const updateDoc = {
                 $set: profileUpdate
             };
-        
+
             const result = await userCollection.updateOne(filter, updateDoc, options);
             console.log(result);
             res.send(result);
@@ -167,7 +203,7 @@ async function run() {
             res.send(result);
         })
 
-        app.patch('/users/tourGuide/:id', verifyToken, verifyAdmin, async (req, res) => {
+        app.patch('/users/guide/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedDoc = {
@@ -186,7 +222,15 @@ async function run() {
             res.send(result);
         })
 
+
+
+        //Spot related API
         app.get('/spots', async (req, res) => {
+            const result = await spotCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/allspots', async (req, res) => {
             const result = await spotCollection.find().toArray();
             res.send(result);
         })
@@ -198,19 +242,144 @@ async function run() {
             res.send(result);
         })
 
-        app.patch('/wishspots/:id', async (req, res) => {
-            const id = req.params.id;
-            const filter = { _id: new ObjectId(id) };
-            const updatedWishlist = req.body;
-            console.log(updatedWishlist);
-            const updateDoc = {
-                $set: {
-                    wishlist: updatedWishlist.wish,
-                },
-            };
-            const result = await spotCollection.updateOne(filter, updateDoc);
+        // GET wishlist items by user email
+        app.get('/wishlist/:email', async (req, res) => {
+            const userEmail = req.params.email;
+            try {
+                const wishlistItems = await spotCollection.find({ wish_email: userEmail }).toArray();
+                res.status(200).json(wishlistItems);
+            } catch (error) {
+                console.error('Error fetching wishlist items:', error);
+                res.status(500).json({ message: 'Failed to fetch wishlist items' });
+            }
+        });
+
+        app.post('/tours', async (req, res) => {
+            const newTour = req.body;
+            const result = await spotCollection.insertOne(newTour);
             res.send(result);
         });
+
+        app.patch('/wishspots/:id', async (req, res) => {
+            const id = req.params.id;
+            const { wish, wish_email } = req.body;
+            const filter = { _id: new ObjectId(id) };
+
+            try {
+                let updateDoc;
+                if (wish === 1) {
+                    updateDoc = {
+                        $addToSet: { wish_email: wish_email }
+                    };
+                } else {
+                    updateDoc = {
+                        $pull: { wish_email: wish_email }
+                    };
+                }
+
+                const result = await spotCollection.updateOne(filter, updateDoc);
+
+                // Check the current status of wish_email array
+                const spot = await spotCollection.findOne(filter);
+                const wishlistStatus = spot.wish_email.length > 0 ? 1 : 0;
+
+                // Update the wishlist status
+                await spotCollection.updateOne(filter, { $set: { wishlist: wishlistStatus } });
+
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to update wishlist" });
+            }
+        });
+
+        // DELETE wishlist item by ID
+        app.delete('/wishlist/:id', async (req, res) => {
+            const id = req.params.id;
+            try {
+                const result = await spotCollection.deleteOne({ _id: new ObjectId(id) });
+                res.status(200).json(result);
+            } catch (error) {
+                console.error('Error deleting wishlist item:', error);
+                res.status(500).json({ message: 'Failed to delete wishlist item' });
+            }
+        });
+
+        app.get('/request-guide', async (req, res) => {
+            const result = await guideRequestsCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.post('/request-guide', async (req, res) => {
+            const { user } = req.body;
+
+            // Check if user has already requested
+            if (requestedUsers.find(u => u.email === user.email)) {
+                return res.status(400).json({ message: 'User has already requested to be a tour guide.' });
+            }
+
+            // Simulate saving to database (replace with actual database logic)
+            requestedUsers.push(user);
+
+            // Example of sending email to admin (not implemented in this example)
+            const result = await guideRequestsCollection.insertOne(user);
+
+
+            res.status(200).json({ message: 'Request sent successfully' });
+        });
+
+        //Booking Collection
+        app.get('/booking', async (req, res) => {
+            const result = await bookCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/assigned', async (req, res) => {
+            const email = req.query.email;
+            //   console.log(req.query);
+            const query = { email: email }
+            const result = await bookCollection.find(query).toArray();
+            res.send(result);
+        });
+
+        app.get('/mybooking/:email', async (req, res) => {
+            const email = req.params.email;
+            console.log(req.params);
+            const query = { tourist_email: email }
+            const result = await bookCollection.find(query).toArray();
+            res.send(result);
+        });
+
+        app.post('/booking', async (req, res) => {
+            const newTour = req.body;
+            const result = await bookCollection.insertOne(newTour);
+            res.send(result);
+        });
+
+
+        app.patch('/users/bookingAccept/:id', verifyToken, verifyTourGuide, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    accept: 'yes'
+                }
+            }
+            const result = await bookCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+        })
+
+        app.patch('/users/bookingReject/:id', verifyToken, verifyTourGuide, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    accept: 'reject'
+                }
+            }
+            const result = await bookCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+        })
 
         app.get('/', (req, res) => {
             res.send('Welcome to Our Tourist Guide!');
