@@ -250,6 +250,13 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/tourtype/:type', async (req, res) => {
+            console.log(req.params.type);
+            const result = await spotCollection.find({ tour_type: req.params.type }).toArray();
+            res.send(result);
+            console.log(result);
+        })
+
         // GET wishlist items by user email
         app.get('/wishlist/:email', async (req, res) => {
             const userEmail = req.params.email;
