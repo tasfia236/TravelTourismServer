@@ -157,6 +157,13 @@ async function run() {
             res.status(200).json({ message: 'Request sent successfully' });
         });
 
+        app.get('/guidedetails/:id', async (req, res) => {
+            const id = req.params.id;
+            const quary = { _id: new ObjectId(id) }
+            const result = await userCollection.findOne(quary);
+            res.send(result);
+        })
+
         app.post('/users', async (req, res) => {
             const user = req.body;
             // insert email if user doesnt exists: 
