@@ -29,8 +29,9 @@ async function run() {
 
         const userCollection = client.db("touristGuideDB").collection("users");
         const spotCollection = client.db("touristGuideDB").collection("spots");
+        const storyCollection = client.db("touristGuideDB").collection("stories");
         const bookCollection = client.db("touristGuideDB").collection("books");
-        const guideRequestsCollection = client.db("touristGuideDB").collection("request");
+        const guideRequestsCollection = client.db("touristGuideDB").collection("requests");
 
         // jwt related api
         app.post('/jwt', async (req, res) => {
@@ -294,7 +295,7 @@ async function run() {
         });
 
         // DELETE wishlist item by ID
-        app.delete('/wishlist/:id', async (req, res) => {
+        app.delete('/wish/:id', async (req, res) => {
             const id = req.params.id;
             try {
                 const result = await spotCollection.deleteOne({ _id: new ObjectId(id) });
@@ -305,6 +306,27 @@ async function run() {
             }
         });
 
+
+
+        //Story api
+        app.get('/stories', async (req, res) => {
+            const result = await storyCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/allstories', async (req, res) => {
+            const result = await storyCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/story/:id', async (req, res) => {
+            const id = req.params.id;
+            const quary = { _id: new ObjectId(id) }
+            const result = await storyCollection.findOne(quary);
+            res.send(result);
+        })
+
+        //request Guide api
         app.get('/request-guide', async (req, res) => {
             const result = await guideRequestsCollection.find().toArray();
             res.send(result);
@@ -325,8 +347,9 @@ async function run() {
             const result = await guideRequestsCollection.insertOne(user);
 
 
-            res.status(200).json({ message: 'Request sent successfully' });
+            res.send(result);
         });
+
 
         //Booking Collection
         app.get('/booking', async (req, res) => {
@@ -342,7 +365,7 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/mybooking/:email', async (req, res) => {
+        app.get('/booking/:email', async (req, res) => {
             const email = req.params.email;
             console.log(req.params);
             const query = { tourist_email: email }
@@ -362,7 +385,7 @@ async function run() {
             const filter = { _id: new ObjectId(id) };
             const updatedDoc = {
                 $set: {
-                    accept: 'yes'
+                    status: 'Accepted'
                 }
             }
             const result = await bookCollection.updateOne(filter, updatedDoc);
@@ -374,12 +397,14 @@ async function run() {
             const filter = { _id: new ObjectId(id) };
             const updatedDoc = {
                 $set: {
-                    accept: 'reject'
+                    status: 'Rejected'
                 }
             }
             const result = await bookCollection.updateOne(filter, updatedDoc);
             res.send(result);
         })
+
+
 
         app.get('/', (req, res) => {
             res.send('Welcome to Our Tourist Guide!');
